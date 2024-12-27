@@ -15,8 +15,8 @@ RtcDS1302<ThreeWire> Rtc(myWire);
 int lastSecond = -1;  // Variable to store the last second checked
 
 // Alarm variables:
-int hour = 16;
-int minute = 53;
+int hour = 9;
+int minute = 0;
 int second = 0;
 
 // Liquid Crystal
@@ -66,12 +66,6 @@ void turnBuzzerOff() {
   digitalWrite(buzzerPin, LOW); // Set the buzzer pin to LOW
 }
 
-void printAlarmMessageLcd(LiquidCrystal_I2C lcd) {
-  lcd.setCursor(0, 0);
-  lcd.print("WAKE UP");
-  lcd.setCursor(0, 1);
-  lcd.print("WAKE UP");
-}
 
 void handleAlarm(int hour, int minute, int second, RtcDateTime now) {
   if (now.Hour() == hour && now.Minute() == minute && now.Second() == second) {
@@ -99,63 +93,9 @@ void handleTimePrinting(RtcDateTime now) {
     lastPrintMillis = currentMillis;
 
     printTime(now);
-    printTimeLcd(now, lcd);
+    printTimeLcd(now, lcd,0,0);
   }
 }
-
-void printTime(RtcDateTime now) {
-  Serial.print("Date: ");
-  Serial.print(now.Day());
-  Serial.print("/");
-  Serial.print(now.Month());
-  Serial.print("/");
-  Serial.print(now.Year());
-  Serial.print(" Time: ");
-  Serial.print(now.Hour());
-  Serial.print(":");
-  Serial.print(now.Minute());
-  Serial.print(":");
-  Serial.println(now.Second());
-}
-
-void printTimeLcd(RtcDateTime now, LiquidCrystal_I2C lcd) {
-  // Format the time and pad it to 16 characters
-  String time = String(now.Hour()) + ":" + 
-                String(now.Minute()) + ":" + 
-                String(now.Second());
-  while (time.length() < 16) {
-    time += " ";
-  }
-
-  // Print the time and the second line
-  lcd.setCursor(0, 0);
-  lcd.print(time);
-  lcd.setCursor(0, 1);
-  String phrase = "stay hard";
-
-  while (phrase.length() < 16) {
-    phrase += " ";
-  }
-  lcd.print(phrase);
-}
-
-void printAlarmSetupLcd(LiquidCrystal_I2C lcd, int hour, int minute) {
-  lcd.setCursor(0,0);
-  String phrase = "SET ALARM";
-  while (phrase.length() < 16) {
-    phrase += " ";
-  }
-  lcd.print(phrase);
-  lcd.setCursor(0,1);
-  String time = String(hour) + " : " + String(minute);
-  
-  while (time.length()<16) {
-    time += " ";
-
-  }
-  lcd.print(time);
-}
-
 
 
 void handleAlarmSetup(){
@@ -209,7 +149,9 @@ void menu(int menuValue, RtcDateTime now) {
     handleAlarm(hour, minute, second, now);
   }
   else if (menuValue == 1){
-    printAlarmSetupLcd(lcd, hour,minute);
+    
+    
+    printAlarmSetupLcd(lcd,hour,minute);
     handleAlarmSetup();
   }
 
@@ -251,6 +193,7 @@ void loop() {
       // Update last button press time
       lastButtonPress = currentMillis;
       clearLcd(lcd);
+      Serial.println("CLEARING AISLE 6");
 
       // Change menu screen
       if (menuValue < maxMenuValue){
@@ -262,7 +205,4 @@ void loop() {
     }
   }
 
-  
-  
-  //printJoystick(xPin, yPin, buttonPin);
 }
