@@ -2,6 +2,8 @@
 #include <RtcDS1302.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
+#include <Arduino.h>
+
 
 // Pin configuration for DS1302 RTC module
 const int RTC_CLK = 7;  // Clock Pin (SCLK)
@@ -46,7 +48,6 @@ int yVal;
 int buttonState;
 
 // LCD Menu
-
 // 0: Normal Clock
 // 1: Set alarm
 
@@ -58,6 +59,18 @@ unsigned long debounceDelayScroll = 150;  // Debounce delay in milliseconds (adj
 int menuValue = 0;
 int maxMenuValue = 1;
 
+String phrases[] = {
+    "STAY HARD",
+    "HAWK",
+    "YOU ARE JUST A BITCH"
+  };
+
+int randomIndex;         // Declare globally to store random index
+String currentPhrase;    // Declare globally to store the chosen phrase
+
+
+
+
 void turnBuzzerOn() {
   digitalWrite(buzzerPin, HIGH); // Set the buzzer pin to HIGH
 }
@@ -68,6 +81,8 @@ void turnBuzzerOff() {
 
 
 void handleAlarm(int hour, int minute, int second, RtcDateTime now) {
+ 
+
   if (now.Hour() == hour && now.Minute() == minute && now.Second() == second) {
     Serial.println("ALARM CLOCK TRIGGERED!");
     printAlarmMessageLcd(lcd);
@@ -93,7 +108,10 @@ void handleTimePrinting(RtcDateTime now) {
     lastPrintMillis = currentMillis;
 
     printTime(now);
-    printTimeLcd(now, lcd,0,0);
+    Serial.println("ALGODIO");
+    Serial.println(currentPhrase);
+    
+    printTimeLcd(now, lcd, currentPhrase, 0,0);
   }
 }
 
@@ -150,7 +168,6 @@ void menu(int menuValue, RtcDateTime now) {
   }
   else if (menuValue == 1){
     
-    
     printAlarmSetupLcd(lcd,hour,minute);
     handleAlarmSetup();
   }
@@ -159,7 +176,17 @@ void menu(int menuValue, RtcDateTime now) {
 
 void setup() {
   Serial.begin(9600);  // Start serial communication
+  Serial.println(randomIndex);
+  Serial.println("randomIndex");  
   Rtc.Begin();         // Initialize the RTC
+
+  int numPhrases = sizeof(phrases) / sizeof(phrases[0]);
+  randomSeed(analogRead(A3));
+  randomIndex = random(0, numPhrases);
+  currentPhrase = phrases[randomIndex];
+
+  Serial.println("HAWK TUAH");
+  Serial.println(currentPhrase);
 
   // Set RTC to compile time (if necessary)
   //RtcDateTime currentTime = RtcDateTime(__DATE__, __TIME__);

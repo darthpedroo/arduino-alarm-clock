@@ -13,7 +13,7 @@ void clearLcd(LiquidCrystal_I2C lcd) {
 
 }
 
-void printTimeLcd(RtcDateTime now, LiquidCrystal_I2C lcd, int row, int col) {
+void printTimeLcd(RtcDateTime now, LiquidCrystal_I2C lcd, String phrase, int row, int col) {
   // Format the time and pad it to 16 characters
 
   String hour = String(now.Hour());
@@ -43,7 +43,6 @@ void printTimeLcd(RtcDateTime now, LiquidCrystal_I2C lcd, int row, int col) {
   lcd.setCursor(row, col);
   lcd.print(time);
   lcd.setCursor(0, 1);
-  String phrase = "stay hard";
 
   while (phrase.length() < 16) {
     phrase += " ";
@@ -59,11 +58,8 @@ void printPhrase(String phrase, int row, int col){
   lcd.print(phrase);
 }
 
-void printAlarmSetupLcd(LiquidCrystal_I2C lcd, int hour, int minute) {
-  String phrase = "SET ALARM";
-  printPhrase(phrase, 0, 0);
-  lcd.setCursor(0, 0);
-  lcd.print(phrase);
+void printAlarmSetupLcd(LiquidCrystal_I2C lcd,  int hour, int minute) {
+  printPhrase("SET ALARM", 0, 0);
   lcd.setCursor(0, 1);
   
   // Add leading zeros for single-digit hour and minute
