@@ -74,6 +74,11 @@ void printAlarmSetupLcd(LiquidCrystal_I2C lcd,  int hour, int minute) {
   lcd.print(time);
 }
 
+void printSnoozeConfig(String snoozeText, int snoozeIncrement){
+  printPhrase(snoozeText,0,0);
+  printPhrase(String(snoozeIncrement),0,1);
+}
+
 void printAlarmMessageLcd(LiquidCrystal_I2C lcd) {
   printPhrase("WAKE UP", 0, 0);
   printPhrase("WAKE UP", 0, 1);

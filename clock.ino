@@ -17,9 +17,9 @@ RtcDS1302<ThreeWire> Rtc(myWire);
 int lastSecond = -1;  // Variable to store the last second checked
 
 // Alarm variables:
-int hour = 9;
-int minute = 0;
-int second = 0;
+int alarmHour = 21;
+int alarmMinute = 0;
+int alarmSecond = 0;
 
 // Liquid Crystal
 LiquidCrystal_I2C lcd(0x27, 16, 2); // Adjust the address if necessary
@@ -50,14 +50,15 @@ int buttonState;
 // LCD Menu
 // 0: Normal Clock
 // 1: Set alarm
+// 2: Wake up alarm
 
 unsigned long lastButtonPress = 0; // Time of the last button press
 unsigned long lastScrollJoystick = 0; 
-unsigned long debounceDelay = 300;  // Debounce delay in milliseconds (adjust as needed)
+unsigned long debounceDelay = 1500;  // Debounce delay in milliseconds (adjust as needed)
 unsigned long debounceDelayScroll = 150;  // Debounce delay in milliseconds (adjust as needed)
 
 int menuValue = 0;
-int maxMenuValue = 1;
+int maxMenuValue = 2;
 
 String phrases[] = {
     "STAY HARD",
@@ -69,7 +70,12 @@ int randomIndex;         // Declare globally to store random index
 String currentPhrase;    // Declare globally to store the chosen phrase
 
 
+// Snooze 
 
+int currentSnooze = 5;
+int snoozeIncremental = 5;
+
+int maxSnooze = 60;
 
 void turnBuzzerOn() {
   digitalWrite(buzzerPin, HIGH); // Set the buzzer pin to HIGH
@@ -81,20 +87,56 @@ void turnBuzzerOff() {
 
 
 void handleAlarm(int hour, int minute, int second, RtcDateTime now) {
- 
 
   if (now.Hour() == hour && now.Minute() == minute && now.Second() == second) {
     Serial.println("ALARM CLOCK TRIGGERED!");
     printAlarmMessageLcd(lcd);
-    
-    for (int i = 0; i < 5; i++) {
-      turnBuzzerOn();
-      delay(1000);
-      turnBuzzerOff();
-      delay(1000);
+
+    unsigned long buzzerStartMillis = millis();  // Start the timer
+    unsigned long buzzerInterval = 1000;  // 1 second interval
+    bool buzzerState = false;  // Track buzzer state (on/off)
+    unsigned long lastBuzzerMillis = millis();  // To manage buzzer intervals
+
+    while (millis() - buzzerStartMillis < 5000) {  // Run alarm for 5 seconds
+      // Check joystick click
+      if (isJoystickClicked(buttonPin)) {
+        unsigned long currentMillis = millis();
+
+        lastButtonPress = currentMillis;
+        alarmMinute += currentSnooze;
+        
+        if (alarmMinute >= 60) {
+          alarmMinute -= 60;
+          alarmHour +=1;
+        }
+
+        if (alarmHour >= 24) {
+          alarmHour = 0;
+        }
+        
+        menuValue = 0;
+        break;  
+        
+      }
+
+      unsigned long currentMillis = millis();
+      if (currentMillis - lastBuzzerMillis >= buzzerInterval) {
+        lastBuzzerMillis = currentMillis;  // Update the buzzer timer
+
+        // Toggle buzzer state
+        buzzerState = !buzzerState;
+        if (buzzerState) {
+          turnBuzzerOn();
+        } else {
+          turnBuzzerOff();
+        }
+      }
     }
+    turnBuzzerOff();  // Make sure to turn off the buzzer after the alarm is finished
   }
 }
+
+
 
 void triggerBuzzerAlarm(int beeps) {
   totalBeeps = beeps;   // Establecer el número total de beeps
@@ -108,9 +150,6 @@ void handleTimePrinting(RtcDateTime now) {
     lastPrintMillis = currentMillis;
 
     printTime(now);
-    Serial.println("ALGODIO");
-    Serial.println(currentPhrase);
-    
     printTimeLcd(now, lcd, currentPhrase, 0,0);
   }
 }
@@ -125,34 +164,34 @@ void handleAlarmSetup(){
       lastScrollJoystick = currentMillis;
   
       if (isPinHigh(xPin) ) {
-        if (hour >= 23) {
-          hour = 0;}
+        if (alarmHour >= 23) {
+          alarmHour = 0;}
         else {
-          hour++;
+          alarmHour++;
         }
       }
       else if (isPinLow(xPin)) {
-        if (hour <= 0){
-          hour = 23;
+        if (alarmHour <= 0){
+          alarmHour = 23;
         }
         else{
-          hour--;
+          alarmHour--;
         }
       }
       else if (isPinLow(yPin)) {
-        if ( minute >= 59) {
-          minute = 0;
+        if ( alarmMinute >= 59) {
+          alarmMinute = 0;
         }
         else {
-          minute ++;
+          alarmMinute ++;
         }
       }
       else if (isPinHigh(yPin)) {
-        if ( minute <= 0) {
-          minute = 59;
+        if ( alarmMinute <= 0) {
+          alarmMinute = 59;
         }
         else {
-          minute --;
+          alarmMinute --;
         }
 
       }
@@ -164,14 +203,49 @@ void menu(int menuValue, RtcDateTime now) {
   
   if (menuValue == 0){
     handleTimePrinting(now);
-    handleAlarm(hour, minute, second, now);
+    handleAlarm(alarmHour, alarmMinute, alarmSecond, now);
   }
   else if (menuValue == 1){
-    
-    printAlarmSetupLcd(lcd,hour,minute);
+
+    printAlarmSetupLcd(lcd,alarmHour,alarmMinute);
     handleAlarmSetup();
   }
+  
+  else if (menuValue ==2 ){
+    String snoozeText = "Snooze Config";
 
+    unsigned long currentMillis = millis();
+    
+    if (currentMillis - lastScrollJoystick >= debounceDelayScroll) {
+
+      lastScrollJoystick = currentMillis;
+      
+      if (isPinLow(yPin)) {
+
+        if (currentSnooze >= maxSnooze) {
+          currentSnooze = 0;
+        }
+        else{
+          currentSnooze += snoozeIncremental;    
+         }        
+      }
+      else if (isPinHigh(yPin)) {
+
+        if (currentSnooze <= 0){
+          currentSnooze = maxSnooze;
+        }
+        else{
+          currentSnooze -= snoozeIncremental;   
+        }
+      }
+      printSnoozeConfig(snoozeText, currentSnooze);
+    
+    }
+
+    
+
+  }
+  
 }
 
 void setup() {
