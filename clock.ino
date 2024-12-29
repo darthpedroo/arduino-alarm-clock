@@ -5,6 +5,7 @@
 #include <Arduino.h>
 
 
+
 // Pin configuration for DS1302 RTC module
 const int RTC_CLK = 7;  // Clock Pin (SCLK)
 const int RTC_DAT = 8;  // Data Pin (I/O)
@@ -15,11 +16,6 @@ ThreeWire myWire(RTC_DAT, RTC_CLK, RTC_RST);
 RtcDS1302<ThreeWire> Rtc(myWire);
 
 int lastSecond = -1;  // Variable to store the last second checked
-
-// Alarm variables:
-int alarmHour = 21;
-int alarmMinute = 0;
-int alarmSecond = 0;
 
 // Liquid Crystal
 LiquidCrystal_I2C lcd(0x27, 16, 2); // Adjust the address if necessary
@@ -51,6 +47,7 @@ int buttonState;
 // 0: Normal Clock
 // 1: Set alarm
 // 2: Wake up alarm
+// 3: Show all alarms
 
 unsigned long lastButtonPress = 0; // Time of the last button press
 unsigned long lastScrollJoystick = 0; 
@@ -58,7 +55,7 @@ unsigned long debounceDelay = 1500;  // Debounce delay in milliseconds (adjust a
 unsigned long debounceDelayScroll = 150;  // Debounce delay in milliseconds (adjust as needed)
 
 int menuValue = 0;
-int maxMenuValue = 2;
+int maxMenuValue = 3;
 
 String phrases[] = {
     "STAY HARD",
@@ -77,6 +74,47 @@ int snoozeIncremental = 5;
 
 int maxSnooze = 60;
 
+
+//ALARMS ARRAY
+
+class Alarm {
+public:
+    int hour;
+    int minute;
+    int second;
+    bool isActive;
+
+    Alarm() {
+        hour = 0;
+        minute = 0;
+        second = 0;
+        isActive = false;
+    }
+
+    void setAlarm(int h, int m, int s) {
+        hour = h;
+        minute = m;
+        second = s;
+        isActive = true;
+    }
+
+    void disable() {
+        isActive = false;
+    }
+
+    bool checkAlarm(int currentHour, int currentMinute, int currentSecond) {
+        return isActive && hour == currentHour && minute == currentMinute && second == currentSecond;
+    }
+};
+
+const int MAX_ALARMS = 5;
+int alarmCounter = 0;
+Alarm alarms[MAX_ALARMS];
+
+bool isHandlingAlarm = false;
+bool madeAlarmChanges = false;
+
+
 void turnBuzzerOn() {
   digitalWrite(buzzerPin, HIGH); // Set the buzzer pin to HIGH
 }
@@ -86,10 +124,14 @@ void turnBuzzerOff() {
 }
 
 
-void handleAlarm(int hour, int minute, int second, RtcDateTime now) {
+void handleAlarm(RtcDateTime now) {
 
-  if (now.Hour() == hour && now.Minute() == minute && now.Second() == second) {
-    Serial.println("ALARM CLOCK TRIGGERED!");
+  for (int i = 0; i < MAX_ALARMS; i++) {
+      
+      Alarm currentAlarm = alarms[i];
+
+      if (now.Hour() == currentAlarm.hour && now.Minute() == currentAlarm.minute && now.Second() == currentAlarm.second){
+              Serial.println("ALARM CLOCK TRIGGERED!");
     printAlarmMessageLcd(lcd);
 
     unsigned long buzzerStartMillis = millis();  // Start the timer
@@ -100,6 +142,10 @@ void handleAlarm(int hour, int minute, int second, RtcDateTime now) {
     while (millis() - buzzerStartMillis < 5000) {  // Run alarm for 5 seconds
       // Check joystick click
       if (isJoystickClicked(buttonPin)) {
+
+        int alarmMinute = currentAlarm.minute;
+        int alarmHour = currentAlarm.hour;
+
         unsigned long currentMillis = millis();
 
         lastButtonPress = currentMillis;
@@ -115,6 +161,7 @@ void handleAlarm(int hour, int minute, int second, RtcDateTime now) {
         }
         
         menuValue = 0;
+        alarms[i].setAlarm(alarmHour, alarmMinute, 0);
         break;  
         
       }
@@ -133,9 +180,9 @@ void handleAlarm(int hour, int minute, int second, RtcDateTime now) {
       }
     }
     turnBuzzerOff();  // Make sure to turn off the buzzer after the alarm is finished
-  }
+      }
+    }
 }
-
 
 
 void triggerBuzzerAlarm(int beeps) {
@@ -155,58 +202,104 @@ void handleTimePrinting(RtcDateTime now) {
 }
 
 
-void handleAlarmSetup(){
-    
+void handleAlarmSetup() {
     unsigned long currentMillis = millis();
     
+    if (alarmCounter >= MAX_ALARMS){
+      menuValue ++;
+    }
     if (currentMillis - lastScrollJoystick >= debounceDelayScroll) {
+        lastScrollJoystick = currentMillis;
+        isHandlingAlarm = true;
 
-      lastScrollJoystick = currentMillis;
-  
-      if (isPinHigh(xPin) ) {
-        if (alarmHour >= 23) {
-          alarmHour = 0;}
-        else {
-          alarmHour++;
+        // Adjust hours
+        if (isPinHigh(xPin)) {
+          madeAlarmChanges = true;
+            if (alarms[alarmCounter].hour >= 23) {
+                alarms[alarmCounter].hour = 0;
+            } else {
+                alarms[alarmCounter].hour++;
+            }
+        } else if (isPinLow(xPin)) {
+          madeAlarmChanges = true;
+            if (alarms[alarmCounter].hour <= 0) {
+                alarms[alarmCounter].hour = 23;
+            } else {
+                alarms[alarmCounter].hour--;
+            }
+        }        
+        if (isPinLow(yPin)) {
+          madeAlarmChanges = true;
+            if (alarms[alarmCounter].minute >= 59) {
+                alarms[alarmCounter].minute = 0;
+            } else {
+                alarms[alarmCounter].minute++;
+            }
+        } else if (isPinHigh(yPin)) {
+          madeAlarmChanges = true;
+            if (alarms[alarmCounter].minute <= 0) {
+                alarms[alarmCounter].minute = 59;
+            } else {
+                alarms[alarmCounter].minute--;
+            }
         }
-      }
-      else if (isPinLow(xPin)) {
-        if (alarmHour <= 0){
-          alarmHour = 23;
-        }
-        else{
-          alarmHour--;
-        }
-      }
-      else if (isPinLow(yPin)) {
-        if ( alarmMinute >= 59) {
-          alarmMinute = 0;
-        }
-        else {
-          alarmMinute ++;
-        }
-      }
-      else if (isPinHigh(yPin)) {
-        if ( alarmMinute <= 0) {
-          alarmMinute = 59;
-        }
-        else {
-          alarmMinute --;
-        }
+    }
 
-      }
+    
+}
 
+void showAllAlarms(LiquidCrystal_I2C &lcd) {
+    static unsigned long lastDisplayMillis = 0;  // To track the time of the last alarm display
+    unsigned long currentMillis = millis();
+    static int alarmIndex = 0;  // To keep track of which alarm to display
+
+    // If enough time has passed since the last alarm was shown, update the display
+    if (currentMillis - lastDisplayMillis >= 2000) {  // 2000 ms delay between alarm displays
+        lastDisplayMillis = currentMillis;  // Update the last display time
+
+        // Clear the screen and display the current alarm
+        lcd.clear();
+        Alarm currentAlarm = alarms[alarmIndex];
+        lcd.setCursor(0, 0);
+        lcd.print("Alarm ");
+        lcd.print(alarmIndex + 1);  
+        lcd.print(": ");
+        lcd.print(currentAlarm.hour);
+        lcd.print(":");
+        if (currentAlarm.minute < 10) {
+            lcd.print("0");
+        }
+        lcd.print(currentAlarm.minute);
+
+        alarmIndex++;
+        if (alarmIndex >= MAX_ALARMS) {
+            alarmIndex = 0;  
+        }
+    }
+
+    if (isJoystickClicked(buttonPin)) {
+        if (currentMillis - lastButtonPress >= debounceDelay) {
+            lastButtonPress = currentMillis;  
+            menuValue++;  
+            if (menuValue > maxMenuValue) {
+                menuValue = 0;  
+            }
+        }
     }
 }
+
+
 
 void menu(int menuValue, RtcDateTime now) {
   
   if (menuValue == 0){
     handleTimePrinting(now);
-    handleAlarm(alarmHour, alarmMinute, alarmSecond, now);
+    handleAlarm(now);
   }
   else if (menuValue == 1){
 
+    int alarmHour = alarms[alarmCounter].hour;
+    int alarmMinute = alarms[alarmCounter].minute; 
     printAlarmSetupLcd(lcd,alarmHour,alarmMinute);
     handleAlarmSetup();
   }
@@ -241,11 +334,10 @@ void menu(int menuValue, RtcDateTime now) {
       printSnoozeConfig(snoozeText, currentSnooze);
     
     }
-
-    
-
   }
-  
+    else if (menuValue == 3) {
+    showAllAlarms(lcd);
+  }
 }
 
 void setup() {
@@ -284,6 +376,12 @@ void loop() {
     menu(menuValue, now);
 
     if (isJoystickClicked(buttonPin)) {
+      if (isHandlingAlarm && madeAlarmChanges) {
+        alarmCounter ++;
+      }
+      isHandlingAlarm = false;
+      madeAlarmChanges = false;
+
     // Get the current time
     unsigned long currentMillis = millis();
     
