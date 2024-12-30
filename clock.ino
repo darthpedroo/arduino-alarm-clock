@@ -114,6 +114,22 @@ Alarm alarms[MAX_ALARMS];
 bool isHandlingAlarm = false;
 bool madeAlarmChanges = false;
 
+#define NOTE_C4  262
+#define NOTE_D4  294
+#define NOTE_E4  330
+#define NOTE_F4  349
+#define NOTE_G4  392
+#define NOTE_A4  440
+#define NOTE_B4  466
+#define REST      0
+
+int melody[] = {
+  NOTE_E4, 4, NOTE_E4, 4, NOTE_F4, 4, NOTE_E4, 4,   // First measure
+  NOTE_E4, 4, NOTE_G4, 4, NOTE_E4, 4, REST, 4,      // Second measure
+  NOTE_A4, 8, NOTE_B4, 8, NOTE_A4, 4, REST, 4,      // Third measure
+  NOTE_G4, 4, NOTE_E4, 4, REST, 4, NOTE_C4, 4       // Fourth measure
+};
+
 
 void turnBuzzerOn() {
   digitalWrite(buzzerPin, HIGH); // Set the buzzer pin to HIGH
@@ -125,64 +141,83 @@ void turnBuzzerOff() {
 
 
 void handleAlarm(RtcDateTime now) {
-
   for (int i = 0; i < MAX_ALARMS; i++) {
-      
-      Alarm currentAlarm = alarms[i];
+    Alarm currentAlarm = alarms[i];
 
-      if (now.Hour() == currentAlarm.hour && now.Minute() == currentAlarm.minute && now.Second() == currentAlarm.second){
-              Serial.println("ALARM CLOCK TRIGGERED!");
-    printAlarmMessageLcd(lcd);
+    // Check if the current time matches the alarm time
+    if (now.Hour() == currentAlarm.hour && now.Minute() == currentAlarm.minute && now.Second() == currentAlarm.second) {
+      Serial.println("ALARM CLOCK TRIGGERED!");
+      printAlarmMessageLcd(lcd);
 
-    unsigned long buzzerStartMillis = millis();  // Start the timer
-    unsigned long buzzerInterval = 1000;  // 1 second interval
-    bool buzzerState = false;  // Track buzzer state (on/off)
-    unsigned long lastBuzzerMillis = millis();  // To manage buzzer intervals
+      unsigned long buzzerStartMillis = millis();  // Start the timer
+      unsigned long melodyStartMillis = millis(); // Start the melody timer
 
-    while (millis() - buzzerStartMillis < 5000) {  // Run alarm for 5 seconds
-      // Check joystick click
-      if (isJoystickClicked(buttonPin)) {
+      // Define the melody and note durations
+      int melody[] = {
+        NOTE_E4, 4, NOTE_E4, 4, NOTE_F4, 4, NOTE_E4, 4,   // First measure
+        NOTE_E4, 4, NOTE_G4, 4, NOTE_E4, 4, REST, 4,      // Second measure
+        NOTE_A4, 8, NOTE_B4, 8, NOTE_A4, 4, REST, 4,      // Third measure
+        NOTE_G4, 4, NOTE_E4, 4, REST, 4, NOTE_C4, 4       // Fourth measure
+      };
+      int melodyLength = sizeof(melody) / sizeof(melody[0]) / 2;  // Number of notes in the melody
+      int noteIndex = 0;
+      unsigned long noteStartMillis = millis();  // Track time for each note
 
-        int alarmMinute = currentAlarm.minute;
-        int alarmHour = currentAlarm.hour;
+      // Play the melody and allow joystick interaction
+      while (millis() - buzzerStartMillis < 60000) {  // Run alarm for 60 seconds
+        // If it's time for the next note
+        if (millis() - noteStartMillis >= (melody[noteIndex * 2 + 1] * 250)) {
+          int note = melody[noteIndex * 2];   // Note frequency
+          int duration = melody[noteIndex * 2 + 1];  // Duration of the note
 
-        unsigned long currentMillis = millis();
+          // Play the current note
+          tone(9, note, duration * 250); // Note duration in milliseconds
+          
+          // Move to the next note
+          noteIndex++;
+          if (noteIndex >= melodyLength) {
+            noteIndex = 0; // Restart the melody if it finished
+          }
 
-        lastButtonPress = currentMillis;
-        alarmMinute += currentSnooze;
-        
-        if (alarmMinute >= 60) {
-          alarmMinute -= 60;
-          alarmHour +=1;
+          // Reset the note timer
+          noteStartMillis = millis();
         }
 
-        if (alarmHour >= 24) {
-          alarmHour = 0;
+        // Check joystick click for snooze or stop
+        if (isJoystickClicked(buttonPin)) {
+          // Stop the alarm when the joystick is clicked
+          noTone(9);  // Stop the tone immediately
+          int alarmMinute = currentAlarm.minute;
+          int alarmHour = currentAlarm.hour;
+
+          unsigned long currentMillis = millis();
+          lastButtonPress = currentMillis;
+          alarmMinute += currentSnooze;
+
+          if (alarmMinute >= 60) {
+            alarmMinute -= 60;
+            alarmHour += 1;
+          }
+
+          if (alarmHour >= 24) {
+            alarmHour = 0;
+          }
+
+          // Reset the menuValue to 0 as requested
+          menuValue = 0;
+
+          alarms[i].setAlarm(alarmHour, alarmMinute, 0); // Set snooze alarm
+          break;  // Exit the alarm loop when snooze is pressed
         }
-        
-        menuValue = 0;
-        alarms[i].setAlarm(alarmHour, alarmMinute, 0);
-        break;  
-        
       }
 
-      unsigned long currentMillis = millis();
-      if (currentMillis - lastBuzzerMillis >= buzzerInterval) {
-        lastBuzzerMillis = currentMillis;  // Update the buzzer timer
-
-        // Toggle buzzer state
-        buzzerState = !buzzerState;
-        if (buzzerState) {
-          turnBuzzerOn();
-        } else {
-          turnBuzzerOff();
-        }
-      }
+      // Ensure the buzzer is off after the alarm duration
+      noTone(9);
     }
-    turnBuzzerOff();  // Make sure to turn off the buzzer after the alarm is finished
-      }
-    }
+  }
 }
+
+
 
 
 void triggerBuzzerAlarm(int beeps) {
@@ -351,8 +386,7 @@ void setup() {
   randomIndex = random(0, numPhrases);
   currentPhrase = phrases[randomIndex];
 
-  Serial.println("HAWK TUAH");
-  Serial.println(currentPhrase);
+
 
   // Set RTC to compile time (if necessary)
   //RtcDateTime currentTime = RtcDateTime(__DATE__, __TIME__);
